@@ -13,7 +13,6 @@ config_version=5
 config/name="Godot"
 run/main_scene="res://Sence/world.tscn"
 config/features=PackedStringArray("4.4", "C#", "Forward Plus")
-config/icon="res://Assets/icon.svg"
 
 [display]
 
