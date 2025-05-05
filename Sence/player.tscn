@@ -602,7 +602,7 @@ position = Vector2(0, -29)
 rotation = -3.14159
 target_position = Vector2(0, 5)
 
-[node name="CoyoteTimer" type="Timer" parent="."]
+[node name="CoyoteJump" type="Timer" parent="."]
 wait_time = 0.1
 one_shot = true
 
@@ -612,8 +612,8 @@ one_shot = true
 
 [node name="HandRayCast" type="RayCast2D" parent="."]
 position = Vector2(0, -26)
-target_position = Vector2(6, 0)
+target_position = Vector2(7, 0)
 
 [node name="FootRayCast" type="RayCast2D" parent="."]
 position = Vector2(0, -4)
-target_position = Vector2(6, 0)
+target_position = Vector2(7, 0)

@@ -7,6 +7,7 @@ public partial class Player : CharacterBody2D
     public const float Speed = 160.0f;
     public const float Acceleration = Speed / 0.2f;
     public const float JumpVelocity = -400.0f;
+    public readonly Vector2 WallJumpVelocity = new(100, -400);
     // Get the gravity from the project settings to be synced with RigidBody nodes.
     public float gravity = ProjectSettings.GetSetting("physics/2d/default_gravity").AsSingle();
     public HashSet<PlayerState> OnGround = [PlayerState.Idle, PlayerState.Running, PlayerState.Landing];
@@ -15,7 +16,8 @@ public partial class Player : CharacterBody2D
     #region 组件
     public Sprite2D PlayerSprite;
     public AnimationPlayer PlayerAnimation;
-    public Timer CoyoteTimer;
+    public Timer CoyoteJump;
+    public Timer RequestJump;
     public RayCast2D TopRayCast;
     #endregion
 
@@ -38,7 +40,8 @@ public partial class Player : CharacterBody2D
     {
         PlayerSprite = GetNode<Sprite2D>("Sprite2D");
 		PlayerAnimation = GetNode<AnimationPlayer>("AnimationPlayer");
-        CoyoteTimer = GetNode<Timer>("CoyoteTimer");
+        CoyoteJump = GetNode<Timer>("CoyoteJump");
+        RequestJump = GetNode<Timer>("RequestJump");
         TopRayCast = GetNode<RayCast2D>("TopRayCast2D");
         CurrentState = PlayerState.Idle;
     }
@@ -49,6 +52,17 @@ public partial class Player : CharacterBody2D
         MoveAndSlide();
     }
 
+    public override void _UnhandledInput(InputEvent @event)
+    {
+        if (@event.IsActionPressed("ui_accept"))
+            RequestJump.Start();
+        if (@event.IsActionReleased("ui_accept"))
+        {
+            if (velocity.Y < JumpVelocity / 2)
+                velocity.Y = JumpVelocity / 2;
+        }
+    }
+
     public bool PlayerMove(PlayerState state, double delta)
     {
         #region 跳跃
@@ -57,9 +71,10 @@ public partial class Player : CharacterBody2D
         //滑墙状态下，重力减小
         if (state == PlayerState.WallSlidingL || state == PlayerState.WallSlidingR)
             velocity.Y += (gravity / 5) * (float)delta;
-        var canJump = IsOnFloor() || (CoyoteTimer.TimeLeft > 0);
-        bool isJump = canJump && Input.IsActionJustPressed("ui_accept");
+        var canJump = IsOnFloor() || CoyoteJump.TimeLeft > 0;
+        bool isJump = canJump && RequestJump.TimeLeft > 0;
         if (isJump) velocity.Y = JumpVelocity;
+        //头碰到障碍
         if (TopRayCast.IsColliding())
         {
             if (velocity.Y < 0) velocity.Y = 0;
@@ -117,12 +132,17 @@ public partial class Player : CharacterBody2D
                 if (!PlayerAnimation.IsPlaying()) return PlayerState.Idle;
                 break;
             case PlayerState.WallSlidingL:
+                if (RequestJump.TimeLeft > 0) return PlayerState.WallJump;
                 if (IsOnFloor()) return PlayerState.Idle;
                 if (!IsOnWall()) return PlayerState.Fall;
                 break;
             case PlayerState.WallSlidingR:
+                if (RequestJump.TimeLeft > 0) return PlayerState.WallJump;
                 if (IsOnFloor()) return PlayerState.Idle;
                 if (!IsOnWall()) return PlayerState.Fall;
+                break;
+            case PlayerState.WallJump:
+                if (Velocity.Y >= 0) return PlayerState.Fall;
                 break;
             default:
                 break;
@@ -136,7 +156,7 @@ public partial class Player : CharacterBody2D
     /// <param name="currentState">当前的状态</param>
     public void TransitionState(PlayerState preState, PlayerState currentState)
     {
-        if (!OnGround.Contains(preState) && OnGround.Contains(currentState)) CoyoteTimer.Stop();
+        if (!OnGround.Contains(preState) && OnGround.Contains(currentState)) CoyoteJump.Stop();
         switch (currentState)
         {
             case PlayerState.Idle:
@@ -147,11 +167,12 @@ public partial class Player : CharacterBody2D
                 break;
             case PlayerState.Jump:
                 PlayerAnimation.Play("jump");
-                CoyoteTimer.Stop();
+                CoyoteJump.Stop();
+                RequestJump.Stop();
                 break;
             case PlayerState.Fall:
                 PlayerAnimation.Play("fall");
-                if (OnGround.Contains(preState)) CoyoteTimer.Start();
+                if (OnGround.Contains(preState)) CoyoteJump.Start();
                 break;
             case PlayerState.Landing:
                 PlayerAnimation.Play("landing");
@@ -166,7 +187,9 @@ public partial class Player : CharacterBody2D
                 break;
             case PlayerState.WallJump:
                 PlayerAnimation.Play("jump");
-                CoyoteTimer.Stop();
+                velocity.Y = JumpVelocity;
+                velocity.X *= GetWallNormal().X;
+                RequestJump.Stop();
                 break;
             default:
                 break;
